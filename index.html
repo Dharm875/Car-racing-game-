@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Turbo Car Racing</title>
+<style>
+*{box-sizing:border-box} body{margin:0;background:#101820;color:#fff;font-family:Arial,sans-serif;display:flex;justify-content:center;min-height:100vh}
+.game{width:min(100vw,480px);padding:12px;display:flex;flex-direction:column;gap:10px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:21px;margin:0;color:#ffd447} .scorebox{font-weight:bold;text-align:right;font-size:14px}
+canvas{width:100%;height:auto;aspect-ratio:9/14;background:#287b3d;border:3px solid #dce4eb;border-radius:12px;touch-action:none}
+.controls{display:flex;gap:12px}.controls button, #startBtn{flex:1;border:0;border-radius:14px;padding:16px 10px;font-size:20px;font-weight:bold;background:#ffd447;color:#14202a;box-shadow:0 4px 0 #b58e12;touch-action:manipulation}
+#startBtn{font-size:17px;background:#37d67a;box-shadow:0 4px 0 #168d48}
+.help{text-align:center;color:#d3dce5;font-size:13px;line-height:1.4}
+</style>
+</head>
+<body>
+<main class="game">
+<header><h1>🏁 TURBO RACING</h1><div class="scorebox">स्कोर: <span id="score">0</span><br>बेस्ट: <span id="best">0</span></div></header>
+<canvas id="game" width="360" height="560" aria-label="Car racing game"></canvas>
+<div class="controls"><button id="left" aria-label="बाएँ">⬅️ LEFT</button><button id="right" aria-label="दाएँ">RIGHT ➡️</button></div>
+<button id="startBtn">▶ गेम शुरू करें</button>
+<div class="help">बटन दबाकर कार को चलाओ और दूसरी कारों से बचो।<br>कीबोर्ड पर ← → भी काम करते हैं।</div>
+</main>
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best'),startBtn=document.getElementById('startBtn');
+let running=false, gameOver=false, score=0, best=Number(localStorage.getItem('turboBest')||0), speed=3, roadOffset=0, spawn=0, last=0;
+let player={lane:1,x:0,y:455,w:42,h:72}, traffic=[];
+bestEl.textContent=best;
+const lanes=[100,180,260];
+function reset(){score=0;speed=3;roadOffset=0;spawn=0;traffic=[];player.lane=1;player.x=lanes[1]-21;player.y=455;running=true;gameOver=false;startBtn.textContent='↻ फिर से शुरू करें';scoreEl.textContent='0'}
+function roundedRect(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function drawCar(x,y,w,h,color,isPlayer=false){
+ roundedRect(x+3,y+4,w,h,8,'rgba(0,0,0,.28)');
+ roundedRect(x,y,w,h,8,color);
+ roundedRect(x+7,y+13,w-14,h-30,6,isPlayer?'#a8edff':'#d8e7f4');
+ ctx.fillStyle='#263746';ctx.fillRect(x+8,y+18,w-16,9);ctx.fillRect(x+8,y+34,w-16,7);
+ ctx.fillStyle='#fff4a6';ctx.fillRect(x+5,y+4,8,5);ctx.fillRect(x+w-13,y+4,8,5);
+ ctx.fillStyle='#fa4545';ctx.fillRect(x+5,y+h-8,8,4);ctx.fillRect(x+w-13,y+h-8,8,4);
+ ctx.fillStyle='#111';ctx.fillRect(x-3,y+13,5,15);ctx.fillRect(x+w-2,y+13,5,15);ctx.fillRect(x-3,y+h-23,5,15);ctx.fillRect(x+w-2,y+h-23,5,15);
+}
+function drawRoad(){
+ ctx.fillStyle='#24743a';ctx.fillRect(0,0,360,560);
+ ctx.fillStyle='#33383e';ctx.fillRect(52,0,256,560);
+ ctx.fillStyle='#f8f0d1';ctx.fillRect(56,0,4,560);ctx.fillRect(300,0,4,560);
+ ctx.fillStyle='#fff';for(let y=-40+(roadOffset%80);y<560;y+=80){ctx.fillRect(139,y,4,42);ctx.fillRect(219,y,4,42)}
+ for(let y=-30+(roadOffset%60);y<560;y+=60){ctx.fillStyle='#e84b4b';ctx.fillRect(45,y,7,28);ctx.fillStyle='#fff';ctx.fillRect(45,y+28,7,28);ctx.fillStyle='#e84b4b';ctx.fillRect(308,y,7,28);ctx.fillStyle='#fff';ctx.fillRect(308,y+28,7,28)}
+}
+function draw(){
+ drawRoad();
+ traffic.forEach(t=>drawCar(t.x,t.y,42,68,t.color));
+ drawCar(player.x,player.y,42,72,'#16a8ff',true);
+ if(!running){ctx.fillStyle='rgba(0,0,0,.58)';ctx.fillRect(0,0,360,560);ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 27px Arial';ctx.fillText(gameOver?'GAME OVER':'TURBO RACING',180,245);ctx.font='17px Arial';ctx.fillText(gameOver?'फिर से खेलने के लिए बटन दबाएँ':'गेम शुरू करने के लिए नीचे दबाएँ',180,282)}
+}
+function move(dir){if(!running)return;player.lane=Math.max(0,Math.min(2,player.lane+dir));player.x=lanes[player.lane]-21}
+function endGame(){running=false;gameOver=true;if(score>best){best=score;localStorage.setItem('turboBest',best);bestEl.textContent=best}startBtn.textContent='↻ फिर से शुरू करें';draw()}
+function loop(ts){
+ if(!last)last=ts;const dt=Math.min(2,(ts-last)/16.67);last=ts;
+ if(running){
+  roadOffset+=speed*dt;spawn+=dt;
+  if(spawn>Math.max(22,52-speed*2)){spawn=0;let lane=Math.floor(Math.random()*3);traffic.push({x:lanes[lane]-21,y:-80,w:42,h:68,color:['#ff4d4d','#ffc247','#b76cff','#f1f1f1'][Math.floor(Math.random()*4)],lane,passed:false})}
+  traffic.forEach(t=>{t.y+=(speed+1)*dt;if(!t.passed&&t.y>player.y+player.h){t.passed=true;score+=10;scoreEl.textContent=score;speed=Math.min(8,3+score/180)}});
+  traffic=traffic.filter(t=>t.y<600);
+  for(const t of traffic){if(t.lane===player.lane&&t.y+60>player.y+10&&t.y<player.y+player.h-8){endGame();break}}
+ }
+ draw();requestAnimationFrame(loop)
+}
+document.getElementById('left').addEventListener('pointerdown',e=>{e.preventDefault();move(-1)});
+document.getElementById('right').addEventListener('pointerdown',e=>{e.preventDefault();move(1)});
+startBtn.addEventListener('click',()=>{reset()});
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')move(-1);if(e.key==='ArrowRight'||e.key==='d')move(1);if(e.key===' '&&!running)reset()});
+draw();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
